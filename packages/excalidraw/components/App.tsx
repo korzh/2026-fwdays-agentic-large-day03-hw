@@ -420,6 +420,7 @@ import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { isPointHittingTextAutoResizeHandle } from "../textAutoResizeHandle";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
 import { isOverScrollBars } from "../scene/scrollbars";
+import { parseMarkdownLink } from "../utils/markdownLink";
 
 import { isMaybeMermaidDefinition } from "../mermaid";
 
@@ -5722,8 +5723,21 @@ class App extends React.Component<AppProps, AppState> {
         }
       }),
       onSubmit: withBatchedUpdates(({ viaKeyboard, nextOriginalText }) => {
-        const isDeleted = !nextOriginalText.trim();
-        updateElement(nextOriginalText, isDeleted);
+        const parsedLink = parseMarkdownLink(nextOriginalText);
+        const resolvedText = parsedLink ? parsedLink.label : nextOriginalText;
+
+        if (parsedLink) {
+          // schedule element mutation after text update flushes into the scene
+          Promise.resolve().then(() => {
+            const currentElement = this.scene.getElement(element.id);
+            if (currentElement) {
+              this.scene.mutateElement(currentElement, { link: parsedLink.url });
+            }
+          });
+        }
+
+        const isDeleted = !resolvedText.trim();
+        updateElement(resolvedText, isDeleted);
 
         // keyboard-submit keeps focus on the edited object. For bound text, keep
         // the container selected even if the text becomes empty and is deleted.
